@@ -36,3 +36,22 @@ vulnerabilities:
   - {id: 94,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v94/CorsSettings.kt}
   - {id: 98,  flavor: full, outcome: "fix:code", where: v98lib/src/main/java/com/appknox/corpus/v98/PluginState.kt}
   - {id: 128, flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v128/RedirectActivity.kt}
+  - {id: 16,  flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v16/WeakCipher.kt}
+  - {id: 17,  flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v17/LogLeak.kt, shared_with: [120]}
+  - {id: 29,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
+  - {id: 30,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
+  - {id: 31,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
+  - {id: 32,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
+  - {id: 33,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
+  - {id: 35,  flavor: full, outcome: "fix:resource",   where: app/src/full/res/xml/config.xml}
+  - {id: 36,  flavor: full, outcome: "fix:resource",   where: app/src/full/res/xml/config.xml}
+  - {id: 37,  flavor: full, outcome: record-only,      where: app/src/full/java/redis/clients/jedis/Jedis.kt}
+  - {id: 92,  flavor: full, outcome: "fix:add-code",   where: (absence), known_gap: true}
+  - {id: 93,  flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v93/RawSql.kt}
+  - {id: 104, flavor: full, outcome: "declined:build", where: app/build.gradle.kts}
+  - {id: 117, flavor: full, outcome: "declined:build", where: app/build.gradle.kts}
+  - {id: 120, flavor: full, outcome: "fix:resource",   where: app/src/full/res/values/strings.xml}
+  - {id: 121, flavor: full, outcome: "fix:resource",   where: app/src/full/res/layout/activity_tapjack.xml}
+  - {id: 122, flavor: full, outcome: "fix:resource",   where: app/src/full/res/layout/activity_keyboard.xml}
+  - {id: 127, flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v127/WeakRandom.kt}
+  - {id: 133, flavor: full, outcome: "fix:add-code",   where: (absence), known_gap: true}

@@ -100,5 +100,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <!-- ids 121/122: not exported, so no overlap with 38/118 -->
+        <activity android:name=".v121.TapjackActivity" android:exported="false" />
+        <activity android:name=".v122.KeyboardActivity" android:exported="false" />
     </application>
 </manifest>
