@@ -19,7 +19,10 @@ apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
 # so find it rather than hardcoding a path. Re-signing with the same keystore
 # keeps the same signer identity and simply adds the v1 (JAR) signature block that
 # enableV1Signing = true failed to produce because minSdk (24) is >= 24.
-keystore=$(find "$HOME" -maxdepth 4 -name debug.keystore 2>/dev/null | head -1)
+# `|| true` on the find|head pipeline: under set -o pipefail, find hitting an
+# unreadable directory (nonzero exit) must not abort the script here — the
+# empty-keystore check below is the intended, clear failure mode instead.
+keystore=$(find "$HOME" -maxdepth 4 -name debug.keystore 2>/dev/null | head -1 || true)
 if [ -z "$keystore" ]; then
   echo "debug.keystore not found under $HOME" >&2
   exit 1

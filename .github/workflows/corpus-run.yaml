@@ -11,7 +11,6 @@ env:
 permissions:
   contents: write
   pull-requests: write
-  id-token: write
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -31,11 +30,20 @@ jobs:
         with: { python-version: "3.12" }
       - uses: actions/setup-go@v5
         with: { go-version: "1.24" }
+      # Checked out under runner.temp, NOT under GITHUB_WORKSPACE: `appknox
+      # autofix` locates/patches files inside the workspace, and must never
+      # see appknox-go's own Go sources as something to patch.
       - uses: actions/checkout@v4
-        with: { repository: appknox/appknox-go, ref: feat/autofix-cli-gate, path: appknox-go }
+        with:
+          repository: appknox/appknox-go
+          ref: feat/autofix-cli-gate
+          path: ${{ runner.temp }}/appknox-go
       - name: Build tools
         run: |
-          (cd appknox-go && go build -o "$GITHUB_WORKSPACE/bin/appknox" .)
+          # $RUNNER_TEMP is a default runner env var (equal to runner.temp),
+          # already exported by the runner into every step - no expression
+          # interpolation needed here.
+          (cd "$RUNNER_TEMP/appknox-go" && go build -o "$RUNNER_TEMP/bin/appknox" .)
           pip install -r tools/requirements.txt
       - name: Create the run branch from the base
         run: |
@@ -51,12 +59,13 @@ jobs:
         run: |
           set -euo pipefail
           for flavor in full legacy; do
-            id=$(./bin/appknox upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
+            id=$("$RUNNER_TEMP/bin/appknox" upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
             [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::bad file id '$id'"; exit 1; }
             echo "BEFORE_${flavor}=${id}" >> "$GITHUB_ENV"
             tools/wait_scan.sh "$id"
             curl -sf --retry 5 -H "Authorization: Token $APPKNOX_ACCESS_TOKEN" \
               "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "before-${flavor}.json"
+            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("count",0); r=d.get("results",[]); c>len(r) and (print(f"::error::{sys.argv[1]}: count={c} exceeds len(results)={len(r)} (pagination would silently drop findings)") or sys.exit(1))' "before-${flavor}.json"
             python tools/score.py detect --expected expected.yaml --flavor "$flavor" --before "before-${flavor}.json"
           done
       - name: Autofix both flavors onto one PR
@@ -64,7 +73,7 @@ jobs:
           set -euo pipefail
           for flavor in full legacy; do
             var="BEFORE_${flavor}"
-            ./bin/appknox autofix --file-id "${!var}" --ref "$RUN_BRANCH" --head-ref "$HEAD_REF"
+            "$RUNNER_TEMP/bin/appknox" autofix --file-id "${!var}" --ref "$RUN_BRANCH" --head-ref "$HEAD_REF"
           done
       - name: Build the PR head and rescan
         run: |
@@ -76,17 +85,20 @@ jobs:
           # under the 244-byte cap, so capGitRef never truncates it. Derived statically rather
           # than parsed from `autofix` output.
           FIX_BRANCH="appknox-autofix/${HEAD_REF}"
+          git ls-remote --exit-code origin "refs/heads/$FIX_BRANCH" >/dev/null || {
+            echo "::error::autofix produced no fix branch (nothing to fix?)"; exit 1; }
           git fetch origin "$FIX_BRANCH"
           git checkout FETCH_HEAD
           git diff "origin/$RUN_BRANCH" --stat
           ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
           tools/force-v1.sh app/build/outputs/apk/full/release/app-full-release.apk
           for flavor in full legacy; do
-            id=$(./bin/appknox upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
+            id=$("$RUNNER_TEMP/bin/appknox" upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
             [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::bad file id '$id'"; exit 1; }
             tools/wait_scan.sh "$id"
             curl -sf --retry 5 -H "Authorization: Token $APPKNOX_ACCESS_TOKEN" \
               "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "after-${flavor}.json"
+            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("count",0); r=d.get("results",[]); c>len(r) and (print(f"::error::{sys.argv[1]}: count={c} exceeds len(results)={len(r)} (pagination would silently drop findings)") or sys.exit(1))' "after-${flavor}.json"
           done
       - name: Score
         if: always()
