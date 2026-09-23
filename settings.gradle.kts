@@ -5,4 +5,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "autofix-corpus-android"
-include(":app", ":v98lib")
+include(":app")
