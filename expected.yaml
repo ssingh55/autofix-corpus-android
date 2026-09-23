@@ -55,3 +55,6 @@ vulnerabilities:
   - {id: 122, flavor: full, outcome: "fix:resource",   where: app/src/full/res/layout/activity_keyboard.xml}
   - {id: 127, flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v127/WeakRandom.kt}
   - {id: 133, flavor: full, outcome: "fix:add-code",   where: (absence), known_gap: true}
+  - {id: 11, flavor: legacy, outcome: "declined:build", where: app/src/legacy/java/com/appknox/corpus/v11/JsBridge.kt}
+  - {id: 82, flavor: legacy, outcome: "fix:code",       where: app/src/legacy/java/com/appknox/corpus/v82/ContactsDump.kt}
+  - {id: 95, flavor: legacy, outcome: "declined:build", where: app/src/legacy/java/com/appknox/corpus/v95/Deserializer.kt}

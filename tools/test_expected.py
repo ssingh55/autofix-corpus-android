@@ -32,6 +32,12 @@ def test_shared_with_refers_to_planted_ids():
         assert set(r.get("shared_with", [])) <= planted, r["id"]
 
 
-@pytest.mark.xfail(strict=True, reason="all ids planted by Task 7; mark removed there")
 def test_all_55_ids_planted():
     assert {r["id"] for r in rows()} == ALL_IDS
+
+
+def test_legacy_sources_use_no_crypto():
+    for base in ("app/src/legacy", "app/src/main"):
+        for f in (ROOT / base).rglob("*.kt"):
+            text = f.read_text()
+            assert "javax.crypto" not in text and "java.security" not in text, f
