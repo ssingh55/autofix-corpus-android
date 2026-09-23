@@ -20,8 +20,7 @@ jobs:
       - name: Scorer and expected.yaml tests
         run: |
           pip install -r tools/requirements.txt
-          # exit 5 = no tests collected; allowed only until Task 2 adds tests
-          python -m pytest -q tools || [ $? -eq 5 ]
+          python -m pytest -q tools
       - name: Build both flavors
         run: ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
       - name: Force v1 signing on the full APK (AGP drops v1 when minSdk >= 24, see issuetracker.google.com/issues/134858541)
