@@ -16,5 +16,6 @@ object Corpus {
         com.appknox.corpus.v88.DynamicReceiver.register(context)
         com.appknox.corpus.v89.ImplicitService.start(context)
         com.appknox.corpus.v94.CorsSettings.apply(web)
+        com.appknox.corpus.v98.PluginState.enable(web)
     }
 }

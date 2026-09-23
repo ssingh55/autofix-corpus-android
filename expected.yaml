@@ -34,6 +34,5 @@ vulnerabilities:
   - {id: 88,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v88/DynamicReceiver.kt}
   - {id: 89,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v89/ImplicitService.kt}
   - {id: 94,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v94/CorsSettings.kt}
-  # not triggerable on AGP 8.13: Could not create task ':v98lib:compileReleaseJavaWithJavac'. > In order to compile Java 9+ source, please set compileSdkVersion to 30 or above
-  - {id: 98,  flavor: full, outcome: record-only, where: app/build.gradle.kts}
+  - {id: 98,  flavor: full, outcome: "fix:code", where: v98lib/src/main/java/com/appknox/corpus/v98/PluginState.kt}
   - {id: 128, flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v128/RedirectActivity.kt}

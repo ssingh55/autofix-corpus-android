@@ -51,6 +51,6 @@ android {
     }
 }
 
-// id 98: v98lib (compileSdk 25, needed for the removed WebSettings.setPluginState API) was
-// dropped — AGP 8.13's Java toolchain path rejects compileSdk < 30 once sourceCompatibility is
-// set to VERSION_17. See expected.yaml row 98 for the exact error.
+dependencies {
+    "fullImplementation"(project(":v98lib"))
+}
