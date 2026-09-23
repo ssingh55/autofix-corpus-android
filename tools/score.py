@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import yaml
@@ -15,6 +16,7 @@ import yaml
 FIX_OUTCOMES = {"fix:code", "fix:manifest", "fix:resource", "fix:add-code"}
 OUTCOMES = FIX_OUTCOMES | {"declined:build", "record-only", "canary"}
 FLAVORS = {"full", "legacy"}
+ANDROID_NAME = "{http://schemas.android.com/apk/res/android}name"
 
 
 class IncompleteScan(Exception):
@@ -38,6 +40,22 @@ def risky(analyses: dict) -> dict[int, int]:
     return {a["vulnerability"]: a.get("computed_risk", 0)
             for a in analyses.get("results", [])
             if a.get("computed_risk", 0) > 0}
+
+
+def declared_permissions(manifests) -> set[str]:
+    """Permissions requested by <uses-permission> elements (comments do not count)."""
+    declared = set()
+    for path in manifests:
+        root = ET.parse(path).getroot()
+        for tag in ("uses-permission", "uses-permission-sdk-23"):
+            declared |= {e.get(ANDROID_NAME) for e in root.iter(tag) if e.get(ANDROID_NAME)}
+    return declared
+
+
+def removed_permissions(rows: list[dict], manifests) -> set[str]:
+    """requires_permission values that none of the given (fix-branch) manifests declare."""
+    required = {r["requires_permission"] for r in rows if r.get("requires_permission")}
+    return required - declared_permissions(manifests)
 
 
 def _flavor_rows(rows: list[dict], flavor: str) -> list[dict]:
@@ -137,6 +155,9 @@ def main(argv: list[str]) -> int:
             p.add_argument("--json", required=True)
             p.add_argument("--removed-permission", action="append", default=[],
                            help="permission the fix branch no longer declares (repeatable)")
+            p.add_argument("--manifest", action="append", default=[],
+                           help="fix-branch manifest; a requires_permission none of them "
+                                "declares counts as removed (repeatable)")
             p.add_argument("--not-attempted", action="append", default=[], type=int,
                            help="id the fixer never attempted (repeatable)")
             p.add_argument("--partial", default="",
@@ -158,7 +179,8 @@ def main(argv: list[str]) -> int:
     after_payload = _load_json(args.after)
     report = score(rows, args.flavor, before, risky(after_payload),
                    before_payload.get("count", 0), after_payload.get("count", 0),
-                   removed_permissions=args.removed_permission,
+                   removed_permissions=set(args.removed_permission)
+                   | (removed_permissions(rows, args.manifest) if args.manifest else set()),
                    not_attempted=args.not_attempted)
     report["meta"] = dict(m.split("=", 1) for m in args.meta)
     if args.partial:

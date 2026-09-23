@@ -220,3 +220,37 @@ def test_cli_rejects_malformed_meta(tmp_path):
     argv = _score_files(tmp_path, analyses({5: 3}), analyses({}))
     with pytest.raises(SystemExit):
         score.main(argv + ["--meta", "no-equals-sign"])
+
+
+MANIFEST = """<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    {perm}
+    <uses-permission android:name="android.permission.VIBRATE" />
+</manifest>
+"""
+INTERNET = '<uses-permission android:name="android.permission.INTERNET" />'
+
+
+def test_removed_permissions_from_manifests(tmp_path):
+    kept, gone, commented = (tmp_path / n for n in ("kept.xml", "gone.xml", "commented.xml"))
+    kept.write_text(MANIFEST.format(perm=INTERNET))
+    gone.write_text(MANIFEST.format(perm=""))
+    commented.write_text(MANIFEST.format(perm=f"<!-- {INTERNET} -->"))
+    assert score.removed_permissions(TLS_ROWS, [kept]) == set()
+    assert score.removed_permissions(TLS_ROWS, [gone]) == {"android.permission.INTERNET"}
+    assert score.removed_permissions(TLS_ROWS, [commented]) == {"android.permission.INTERNET"}
+    # Declared in any of the merged manifests (e.g. moved to main) still counts as kept.
+    assert score.removed_permissions(TLS_ROWS, [gone, kept]) == set()
+
+
+def test_cli_score_manifest_marks_precondition_removal(tmp_path):
+    argv = _score_files(tmp_path, analyses({5: 3, 17: 2}), analyses({17: 2}))
+    m = tmp_path / "m.xml"
+    m.write_text(MANIFEST.format(perm=""))
+    assert score.main(argv + ["--manifest", str(m)]) == 0
+    rows = json.loads((tmp_path / "s.json").read_text())["rows"]
+    assert {r["id"]: r["result"] for r in rows}[5] == "cleared-by-precondition-removal"
+    m.write_text(MANIFEST.format(perm=INTERNET))
+    assert score.main(argv + ["--manifest", str(m)]) == 0
+    rows = json.loads((tmp_path / "s.json").read_text())["rows"]
+    assert {r["id"]: r["result"] for r in rows}[5] == "fixed-as-expected"
