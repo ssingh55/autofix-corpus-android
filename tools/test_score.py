@@ -109,3 +109,114 @@ def test_render_markdown_has_row_per_id():
     report = score.score(ROWS, "full", {17: 2}, {}, 60, 60)
     md = score.render_markdown(report)
     assert "| 17 |" in md and "fixed-as-expected" in md
+
+
+# --- final-review fixes: precondition removal, record-only sharers, canary vs record-only gate,
+# --- not-attempted, the score CLI and its clean IncompleteScan exit.
+
+TLS_ROWS = [
+    {"id": 5, "flavor": "full", "outcome": "fix:code", "where": "v5/TrustAllManager.kt",
+     "requires_permission": "android.permission.INTERNET"},
+    {"id": 10, "flavor": "full", "outcome": "fix:manifest", "where": "AndroidManifest.xml",
+     "shared_with": [34]},
+    {"id": 34, "flavor": "full", "outcome": "record-only", "where": "AndroidManifest.xml"},
+    {"id": 38, "flavor": "full", "outcome": "fix:manifest", "where": "AndroidManifest.xml",
+     "shared_with": [34, 85]},
+    {"id": 85, "flavor": "full", "outcome": "fix:code", "where": "v85/PrefActivity.kt"},
+    {"id": 86, "flavor": "full", "outcome": "canary", "where": "v86/FileWebActivity.kt"},
+]
+
+
+def test_cleared_after_permission_removed_is_not_credited_as_fixed():
+    report = score.score(TLS_ROWS, "full", {5: 3, 10: 1}, {}, 60, 60,
+                         removed_permissions=["android.permission.INTERNET"])
+    assert result_for(report, 5) == "cleared-by-precondition-removal"
+    assert result_for(report, 10) == "fixed-as-expected"
+
+
+def test_cleared_with_permission_kept_is_fixed():
+    report = score.score(TLS_ROWS, "full", {5: 3}, {}, 60, 60)
+    assert result_for(report, 5) == "fixed-as-expected"
+
+
+def test_record_only_sharer_is_not_a_blocker():
+    before = {10: 1, 34: 1, 38: 2, 85: 2}
+    report = score.score(TLS_ROWS, "full", before, {10: 1, 34: 1, 38: 2}, 60, 60)
+    assert result_for(report, 10) == "blocked-by-record-only"
+    assert result_for(report, 38) == "blocked-by-record-only"
+
+
+def test_fixable_sharer_still_blocks_even_with_record_only_present():
+    before = {34: 1, 38: 2, 85: 2}
+    report = score.score(TLS_ROWS, "full", before, {34: 1, 38: 2, 85: 2}, 60, 60)
+    assert result_for(report, 38) == "blocked-by-shared"
+
+
+def test_no_sharer_present_is_missed():
+    report = score.score(TLS_ROWS, "full", {10: 1, 34: 1}, {10: 1}, 60, 60)
+    assert result_for(report, 10) == "missed"
+
+
+def test_not_attempted_beats_missed_and_blocked():
+    report = score.score(TLS_ROWS, "full", {10: 1, 34: 1}, {10: 1, 34: 1}, 60, 60,
+                         not_attempted=[10])
+    assert result_for(report, 10) == "not-attempted"
+
+
+def test_undetected_record_only_is_gated_but_canary_is_not():
+    gaps = score.detect(TLS_ROWS, "full", {5: 3, 10: 1, 38: 2, 85: 2})
+    assert 34 in gaps  # record-only: fires-but-unfixable, so it must be detected
+    assert 86 not in gaps  # canary: cannot be triggered, the only exempt outcome
+
+
+def _score_files(tmp_path, before, after):
+    e = tmp_path / "e.yaml"
+    e.write_text(
+        'vulnerabilities:\n'
+        '  - {id: 5, flavor: full, outcome: "fix:code", where: x, '
+        'requires_permission: android.permission.INTERNET}\n'
+        '  - {id: 17, flavor: full, outcome: "fix:code", where: x}\n')
+    b, a = tmp_path / "b.json", tmp_path / "a.json"
+    b.write_text(json.dumps(before))
+    a.write_text(json.dumps(after))
+    return ["score", "--expected", str(e), "--flavor", "full", "--before", str(b),
+            "--after", str(a), "--summary", str(tmp_path / "s.md"),
+            "--json", str(tmp_path / "s.json")]
+
+
+def test_cli_score_writes_summary_and_json(tmp_path):
+    argv = _score_files(tmp_path, analyses({5: 3, 17: 2}), analyses({17: 2}))
+    argv += ["--removed-permission", "android.permission.INTERNET",
+             "--meta", "appknox-go=4f69cc6", "--meta", "files=1/2",
+             "--partial", "full: budget exhausted"]
+    assert score.main(argv) == 0
+    report = json.loads((tmp_path / "s.json").read_text())
+    assert {r["id"]: r["result"] for r in report["rows"]} == {
+        5: "cleared-by-precondition-removal", 17: "missed"}
+    md = (tmp_path / "s.md").read_text()
+    assert md.startswith("### Autofix corpus scorecard (full) PARTIAL: full: budget exhausted")
+    assert "- appknox-go: 4f69cc6" in md and "- files: 1/2" in md
+    assert "| 17 | fix:code | missed |" in md
+
+
+def test_cli_score_not_attempted(tmp_path):
+    argv = _score_files(tmp_path, analyses({5: 3, 17: 2}), analyses({17: 2}))
+    assert score.main(argv + ["--not-attempted", "17"]) == 0
+    report = json.loads((tmp_path / "s.json").read_text())
+    assert {r["id"]: r["result"] for r in report["rows"]}[17] == "not-attempted"
+
+
+def test_cli_incomplete_scan_exits_cleanly(tmp_path, capsys):
+    before = analyses({5: 3, 17: 2})
+    after = {"count": 10, "results": []}
+    argv = _score_files(tmp_path, before, after)
+    with pytest.raises(SystemExit) as exc:
+        score.cli(argv)
+    assert "not finished" in str(exc.value.code)
+    assert not (tmp_path / "s.md").exists()
+
+
+def test_cli_rejects_malformed_meta(tmp_path):
+    argv = _score_files(tmp_path, analyses({5: 3}), analyses({}))
+    with pytest.raises(SystemExit):
+        score.main(argv + ["--meta", "no-equals-sign"])
