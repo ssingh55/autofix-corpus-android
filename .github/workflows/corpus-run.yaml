@@ -6,20 +6,25 @@ on:
       baseRef:
         description: "Tag or branch holding the untouched corpus"
         default: "corpus-base"
+      fixerRef:
+        description: "appknox-go ref (branch, tag or SHA) to build the fixer from; its SHA is recorded in the scorecard"
+        default: "feat/autofix-cli-gate"
 env:
   APPKNOX_API_HOST: https://autofix.staging.appknox.io/
 permissions:
   contents: write
   pull-requests: write
+# Secrets are NOT set job-wide: APPKNOX_ACCESS_TOKEN and GITHUB_TOKEN are given only to the
+# steps that call Appknox or push, never to a Gradle build of LLM-authored code.
 jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     env:
-      APPKNOX_ACCESS_TOKEN: ${{ secrets.APPKNOX_AUTOFIX_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BASE_REF: ${{ inputs.baseRef }}
     steps:
+      # persist-credentials stays on for this checkout only because "Create the run branch"
+      # pushes with it; that step drops the stored credential right after the push.
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.baseRef }}
@@ -36,48 +41,99 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: appknox/appknox-go
-          ref: feat/autofix-cli-gate
+          ref: ${{ inputs.fixerRef }}
           path: ${{ runner.temp }}/appknox-go
-      - name: Build tools
+          persist-credentials: false
+      - name: Build tools and snapshot the scorer
         run: |
+          set -euo pipefail
           # $RUNNER_TEMP is a default runner env var (equal to runner.temp),
           # already exported by the runner into every step - no expression
           # interpolation needed here.
           (cd "$RUNNER_TEMP/appknox-go" && go build -o "$RUNNER_TEMP/bin/appknox" .)
-          pip install -r tools/requirements.txt
+          # Scorer, helper scripts and expected.yaml are copied out of the workspace
+          # BEFORE any fix branch is checked out: the fix branch is LLM-authored, and
+          # .py is a source suffix the fixer may edit. Everything below runs these copies.
+          mkdir -p "$RUNNER_TEMP/corpus" "$RUNNER_TEMP/out"
+          cp -R tools expected.yaml "$RUNNER_TEMP/corpus/"
+          pip install -r "$RUNNER_TEMP/corpus/tools/requirements.txt"
+          echo "FIXER_SHA=$(git -C "$RUNNER_TEMP/appknox-go" rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "CORPUS_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: Create the run branch from the base
         run: |
+          set -euo pipefail
           run_branch="corpus-run/${GITHUB_RUN_ID}"
           git push origin "HEAD:refs/heads/${run_branch}"
+          # Drop the checkout's stored push credential: nothing after this pushes with it
+          # (autofix pushes through the API with the step-scoped GITHUB_TOKEN), and later
+          # steps build LLM-authored code. The repo is public, so fetches need no auth.
+          # (get-regexp exits 1 when nothing matches; that is fine, hence the || true.)
+          { git config --local --name-only --get-regexp '^http\..*\.extraheader$' || true; } | while read -r key; do
+            git config --local --unset-all "$key"
+          done
           echo "RUN_BRANCH=${run_branch}" >> "$GITHUB_ENV"
           echo "HEAD_REF=autofix-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
       - name: Build baseline APKs
         run: ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
       - name: Force v1 signing on the baseline full APK
-        run: tools/force-v1.sh app/build/outputs/apk/full/release/app-full-release.apk
-      - name: Upload, wait, detection gate
+        run: '"$RUNNER_TEMP/corpus/tools/force-v1.sh" app/build/outputs/apk/full/release/app-full-release.apk'
+      - name: Upload, wait for scan and KnoxIQ, detection gate
+        env:
+          APPKNOX_ACCESS_TOKEN: ${{ secrets.APPKNOX_AUTOFIX_TOKEN }}
         run: |
           set -euo pipefail
+          T="$RUNNER_TEMP/corpus"; OUT="$RUNNER_TEMP/out"; BIN="$RUNNER_TEMP/bin/appknox"
           for flavor in full legacy; do
-            id=$("$RUNNER_TEMP/bin/appknox" upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
+            id=$("$BIN" upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
             [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::bad file id '$id'"; exit 1; }
             echo "BEFORE_${flavor}=${id}" >> "$GITHUB_ENV"
-            tools/wait_scan.sh "$id"
+            "$T/tools/wait_scan.sh" "$id"
+            # autofix refuses to start until KnoxIQ is COMPLETED (one check, no wait), and
+            # triage can rewrite risks, so wait for it before snapshotting.
+            "$T/tools/wait_knoxiq.sh" "$BIN" "$id"
             curl -sf --retry 5 -H "Authorization: Token $APPKNOX_ACCESS_TOKEN" \
-              "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "before-${flavor}.json"
-            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("count",0); r=d.get("results",[]); c>len(r) and (print(f"::error::{sys.argv[1]}: count={c} exceeds len(results)={len(r)} (pagination would silently drop findings)") or sys.exit(1))' "before-${flavor}.json"
-            python tools/score.py detect --expected expected.yaml --flavor "$flavor" --before "before-${flavor}.json"
+              "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "$OUT/before-${flavor}.json"
+            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("count",0); r=d.get("results",[]); c>len(r) and (print(f"::error::{sys.argv[1]}: count={c} exceeds len(results)={len(r)} (pagination would silently drop findings)") or sys.exit(1))' "$OUT/before-${flavor}.json"
+            python "$T/tools/score.py" detect --expected "$T/expected.yaml" --flavor "$flavor" --before "$OUT/before-${flavor}.json"
           done
       - name: Autofix both flavors onto one PR
+        env:
+          APPKNOX_ACCESS_TOKEN: ${{ secrets.APPKNOX_AUTOFIX_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          OUT="$RUNNER_TEMP/out"; BIN="$RUNNER_TEMP/bin/appknox"
+          FIX_BRANCH="appknox-autofix/${HEAD_REF}"
+          for flavor in full legacy; do
+            # autofix pushes WHOLE-FILE contents onto the branch tip, so a run that computed
+            # its patch from corpus-base would overwrite an earlier run's edit to a shared
+            # file (both flavors report ids in app/src/main). Patch on top of the first run.
+            if git ls-remote --exit-code origin "refs/heads/$FIX_BRANCH" >/dev/null; then
+              git fetch origin "$FIX_BRANCH"
+              git checkout -q FETCH_HEAD
+            fi
+            var="BEFORE_${flavor}"
+            # Logs go to runner.temp, never the workspace, so the locate agent cannot read them.
+            "$BIN" autofix --file-id "${!var}" --ref "$RUN_BRANCH" --head-ref "$HEAD_REF" 2>&1 | tee "$OUT/autofix-${flavor}.log"
+          done
+      - name: Re-fetch the baseline analyses after triage
+        env:
+          APPKNOX_ACCESS_TOKEN: ${{ secrets.APPKNOX_AUTOFIX_TOKEN }}
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/out"
+          # autofix only ran once KnoxIQ was COMPLETED, so these are the triaged baselines the
+          # after-scans (also taken post-triage) are compared against.
           for flavor in full legacy; do
             var="BEFORE_${flavor}"
-            "$RUNNER_TEMP/bin/appknox" autofix --file-id "${!var}" --ref "$RUN_BRANCH" --head-ref "$HEAD_REF"
+            curl -sf --retry 5 -H "Authorization: Token $APPKNOX_ACCESS_TOKEN" \
+              "${APPKNOX_API_HOST}api/v2/files/${!var}/analyses?limit=200" > "$OUT/before-${flavor}.json"
+            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("count",0); r=d.get("results",[]); c>len(r) and (print(f"::error::{sys.argv[1]}: count={c} exceeds len(results)={len(r)} (pagination would silently drop findings)") or sys.exit(1))' "$OUT/before-${flavor}.json"
           done
-      - name: Build the PR head and rescan
+      - name: Build the PR head (no secrets in this step)
         run: |
           set -euo pipefail
+          OUT="$RUNNER_TEMP/out"
           # Step 1 finding: appknox-go's helper/delivery.go (feat/autofix-cli-gate) builds the
           # pushed branch as prBranch(headRef) = capGitRef(autofixBranchPrefix + sanitizeFeature(headRef), headRef),
           # where autofixBranchPrefix = "appknox-autofix/". HEAD_REF here ("autofix-<run id>")
@@ -88,33 +144,67 @@ jobs:
           git ls-remote --exit-code origin "refs/heads/$FIX_BRANCH" >/dev/null || {
             echo "::error::autofix produced no fix branch (nothing to fix?)"; exit 1; }
           git fetch origin "$FIX_BRANCH"
-          git checkout FETCH_HEAD
+          git checkout -q FETCH_HEAD
+          echo "FIX_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           git diff "origin/$RUN_BRANCH" --stat
+          # The manifests the scorer checks requires_permission against (C1: removing
+          # INTERNET clears ids 5-9 without touching any TLS code).
+          git show HEAD:app/src/main/AndroidManifest.xml > "$OUT/fix-main-AndroidManifest.xml"
+          git show HEAD:app/src/full/AndroidManifest.xml > "$OUT/fix-full-AndroidManifest.xml"
           ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
-          tools/force-v1.sh app/build/outputs/apk/full/release/app-full-release.apk
+          "$RUNNER_TEMP/corpus/tools/force-v1.sh" app/build/outputs/apk/full/release/app-full-release.apk
+      - name: Rescan the PR head
+        env:
+          APPKNOX_ACCESS_TOKEN: ${{ secrets.APPKNOX_AUTOFIX_TOKEN }}
+        run: |
+          set -euo pipefail
+          T="$RUNNER_TEMP/corpus"; OUT="$RUNNER_TEMP/out"; BIN="$RUNNER_TEMP/bin/appknox"
           for flavor in full legacy; do
-            id=$("$RUNNER_TEMP/bin/appknox" upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
+            id=$("$BIN" upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
             [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::bad file id '$id'"; exit 1; }
-            tools/wait_scan.sh "$id"
+            echo "AFTER_${flavor}=${id}" >> "$GITHUB_ENV"
+            "$T/tools/wait_scan.sh" "$id"
+            # Same post-triage point as the re-fetched baseline, so KnoxIQ timing cannot
+            # make an id appear in one snapshot and not the other.
+            "$T/tools/wait_knoxiq.sh" "$BIN" "$id"
             curl -sf --retry 5 -H "Authorization: Token $APPKNOX_ACCESS_TOKEN" \
-              "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "after-${flavor}.json"
-            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("count",0); r=d.get("results",[]); c>len(r) and (print(f"::error::{sys.argv[1]}: count={c} exceeds len(results)={len(r)} (pagination would silently drop findings)") or sys.exit(1))' "after-${flavor}.json"
+              "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "$OUT/after-${flavor}.json"
+            python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); c=d.get("count",0); r=d.get("results",[]); c>len(r) and (print(f"::error::{sys.argv[1]}: count={c} exceeds len(results)={len(r)} (pagination would silently drop findings)") or sys.exit(1))' "$OUT/after-${flavor}.json"
           done
       - name: Score
         if: always()
         run: |
+          set -uo pipefail
+          T="$RUNNER_TEMP/corpus"; OUT="$RUNNER_TEMP/out"
+          # PARTIAL: the fixer stops at the gateway budget ("...the remaining N were not
+          # attempted") and still exits 0. Its log names skipped findings only by their text,
+          # not by id, so rows cannot be marked not-attempted; the whole scorecard is stamped.
+          partial=""; skipped=""
           for flavor in full legacy; do
-            [ -f "after-${flavor}.json" ] || continue
-            python tools/score.py score --expected expected.yaml --flavor "$flavor" \
-              --before "before-${flavor}.json" --after "after-${flavor}.json" \
-              --summary "scorecard-${flavor}.md" --json "scorecard-${flavor}.json"
-            cat "scorecard-${flavor}.md" >> "$GITHUB_STEP_SUMMARY"
+            log="$OUT/autofix-${flavor}.log"
+            [ -f "$log" ] || continue
+            grep -q 'were not attempted' "$log" && partial="${partial:+$partial, }${flavor} run truncated at the budget (autofix-${flavor}.log)"
+            skipped="${skipped:+$skipped, }${flavor} $(grep -c '^autofix: skipping' "$log")"
+          done
+          removed=()
+          if [ -f "$OUT/fix-full-AndroidManifest.xml" ]; then
+            removed=(--manifest "$OUT/fix-main-AndroidManifest.xml" --manifest "$OUT/fix-full-AndroidManifest.xml")
+          fi
+          for flavor in full legacy; do
+            [ -f "$OUT/after-${flavor}.json" ] || continue
+            before_var="BEFORE_${flavor}"; after_var="AFTER_${flavor}"
+            python "$T/tools/score.py" score --expected "$T/expected.yaml" --flavor "$flavor" \
+              --before "$OUT/before-${flavor}.json" --after "$OUT/after-${flavor}.json" \
+              --summary "$OUT/scorecard-${flavor}.md" --json "$OUT/scorecard-${flavor}.json" \
+              "${removed[@]}" --partial "$partial" \
+              --meta "appknox-go=${FIXER_SHA:-?}" --meta "corpus base=${CORPUS_SHA:-?}" \
+              --meta "fix branch head=${FIX_SHA:-?}" \
+              --meta "file ids=before ${!before_var:-?}, after ${!after_var:-?}" \
+              --meta "findings skipped by autofix=${skipped:-none}" || exit 1
+            cat "$OUT/scorecard-${flavor}.md" >> "$GITHUB_STEP_SUMMARY"
           done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: corpus-run
-          path: |
-            before-*.json
-            after-*.json
-            scorecard-*.*
+          path: ${{ runner.temp }}/out/
