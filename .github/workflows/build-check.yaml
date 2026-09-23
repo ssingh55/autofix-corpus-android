@@ -27,8 +27,8 @@ jobs:
       - name: Check v1 signing (id 117 depends on it)
         run: |
           apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$apksigner" verify --verbose app/build/outputs/apk/full/release/app-full-release.apk \
-            | grep -q "Verified using v1 scheme (JAR signing): true"
+          "$apksigner" verify --verbose app/build/outputs/apk/full/release/app-full-release.apk | tee /tmp/apksigner-verify.txt
+          grep -q "Verified using v1 scheme (JAR signing): true" /tmp/apksigner-verify.txt
       - uses: actions/upload-artifact@v4
         with:
           name: apks
