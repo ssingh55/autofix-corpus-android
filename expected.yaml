@@ -1,0 +1,22 @@
+# Source of truth for the corpus. One row per (id, flavor).
+# outcome: fix:code | fix:manifest | fix:resource | fix:add-code | declined:build | record-only | canary
+# shared_with: other planted ids whose plant also triggers this id (scorer reports blocked-by-shared)
+# known_gap: true when the fixer is known to be unable to fix this today (spec section 2)
+vulnerabilities:
+  - {id: 1,   flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 2,   flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 3,   flavor: full, outcome: "fix:manifest", where: app/src/main/AndroidManifest.xml}
+  - {id: 4,   flavor: full, outcome: canary,         where: app/src/full/AndroidManifest.xml}
+  - {id: 10,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 34,  flavor: full, outcome: record-only,    where: app/src/full/AndroidManifest.xml}
+  - {id: 38,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [34, 84, 85, 86, 128]}
+  - {id: 39,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 40,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [1]}
+  - {id: 41,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [46]}
+  - {id: 42,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 43,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 44,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 45,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 84,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  - {id: 96,  flavor: full, outcome: "fix:manifest", where: app/src/main/AndroidManifest.xml}
+  - {id: 118, flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [34, 38, 42, 84, 85, 86, 128]}

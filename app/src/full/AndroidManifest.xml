@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- id 10: VIBRATE is declared but no Vibrator API is ever called -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- id 34: storage permissions plus a browsable VIEW activity -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <!-- id 4 canary: a custom permission with a non-signature level -->
+    <permission android:name="com.appknox.corpus.permission.V4" android:protectionLevel="normal" />
+    <!-- ids 42-45 guard with this normal-level permission -->
+    <permission android:name="com.appknox.corpus.permission.NORMAL" android:protectionLevel="normal" />
+
+    <application>
+        <uses-library android:name="org.apache.http.legacy" android:required="false" />
+
+        <!-- id 1: exported service, no intent-filter, no permission (also trips 40) -->
+        <service android:name=".components.V1OpenService" android:exported="true" />
+
+        <!-- id 2: grant-uri-permission covering the whole tree -->
+        <provider android:name=".components.V2GrantProvider"
+            android:authorities="com.appknox.corpus.v2" android:exported="false"
+            android:grantUriPermissions="false">
+            <grant-uri-permission android:pathPrefix="/" />
+        </provider>
+
+        <!-- ids 38-41: exported, no permission -->
+        <activity android:name=".components.V38Activity" android:exported="true">
+            <intent-filter>
+                <action android:name="com.appknox.corpus.V38" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <receiver android:name=".components.V39Receiver" android:exported="true" />
+        <service android:name=".components.V40Service" android:exported="true">
+            <intent-filter><action android:name="com.appknox.corpus.V40" /></intent-filter>
+        </service>
+        <provider android:name=".components.V41Provider"
+            android:authorities="com.appknox.corpus.v41" android:exported="true" />
+
+        <!-- ids 42-45: exported, guarded by a NON-signature permission -->
+        <activity android:name=".components.V42Activity" android:exported="true"
+            android:permission="com.appknox.corpus.permission.NORMAL">
+            <intent-filter>
+                <action android:name="com.appknox.corpus.V42" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <receiver android:name=".components.V43Receiver" android:exported="true"
+            android:permission="com.appknox.corpus.permission.NORMAL" />
+        <service android:name=".components.V44Service" android:exported="true"
+            android:permission="com.appknox.corpus.permission.NORMAL" />
+        <provider android:name=".components.V45Provider"
+            android:authorities="com.appknox.corpus.v45" android:exported="true"
+            android:permission="com.appknox.corpus.permission.NORMAL" />
+
+        <!-- id 84: SEND with the file scheme -->
+        <activity android:name=".components.V84ShareActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+            </intent-filter>
+        </activity>
+
+        <!-- id 34: browsable VIEW activity -->
+        <activity android:name=".components.V34BrowsableActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="corpus" />
+            </intent-filter>
+        </activity>
+
+        <!-- id 118 needs no dedicated plant: minSdk 24 < 29 and no exported activity sets taskAffinity="" -->
+    </application>
+</manifest>
