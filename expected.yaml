@@ -1,15 +1,26 @@
 # Source of truth for the corpus. One row per (id, flavor).
 # outcome: fix:code | fix:manifest | fix:resource | fix:add-code | declined:build | record-only | canary
-# shared_with: other planted ids whose plant also triggers this id (scorer reports blocked-by-shared)
+#   record-only: the id FIRES but is not fixable by design; it is still detection-gated
+#                (an undetected record-only row fails the gate like any other).
+#   canary:      the id CANNOT be triggered (a Sherlock defect or an impossible precondition).
+#                canary is the ONLY outcome the detection gate exempts; use it, never
+#                record-only, for a row that cannot fire.
+# shared_with: other planted ids whose plant also triggers this id. If one of them is still
+#   present after the fix the scorer reports blocked-by-shared; if the only ones present are
+#   record-only ids (never expected to be fixed) it reports blocked-by-record-only.
+# requires_permission: the id only fires while the full manifest declares this permission.
+#   If the fix branch removed it, a cleared row scores cleared-by-precondition-removal,
+#   not fixed-as-expected (removing INTERNET silently clears the TLS ids 5-9).
 # known_gap: true when the fixer is known to be unable to fix this today (spec section 2)
 vulnerabilities:
   - {id: 1,   flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
   - {id: 2,   flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
   - {id: 3,   flavor: full, outcome: "fix:manifest", where: app/src/main/AndroidManifest.xml}
   - {id: 4,   flavor: full, outcome: canary,         where: app/src/full/AndroidManifest.xml}
-  - {id: 10,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
+  # 10: VIBRATE plus the storage permissions (which 34 also needs) are unused; INTERNET is used.
+  - {id: 10,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [34]}
   - {id: 34,  flavor: full, outcome: record-only,    where: app/src/full/AndroidManifest.xml}
-  - {id: 38,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [34, 84, 85, 86, 128]}
+  - {id: 38,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [84, 85, 86, 128]}
   - {id: 39,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
   - {id: 40,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [1]}
   - {id: 41,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [46]}
@@ -19,25 +30,31 @@ vulnerabilities:
   - {id: 45,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
   - {id: 84,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
   - {id: 96,  flavor: full, outcome: "fix:manifest", where: app/src/main/AndroidManifest.xml}
+  # 118: MainActivity (main manifest, not a planted id) and V34BrowsableActivity (record-only 34)
+  # also trigger 118, so it is structurally blocked: expect blocked-by-shared or
+  # blocked-by-record-only unless the fixer also hardens those two activities.
   - {id: 118, flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [34, 38, 42, 84, 85, 86, 128]}
-  - {id: 5,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v5/TrustAllManager.kt}
-  - {id: 6,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v6/AllowAllVerifier.kt}
-  - {id: 7,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v7/InsecureFactory.kt}
-  - {id: 8,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v8/LegacyVerifier.kt}
-  - {id: 9,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v9/ProceedingClient.kt}
+  - {id: 5,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v5/TrustAllManager.kt, requires_permission: android.permission.INTERNET}
+  - {id: 6,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v6/AllowAllVerifier.kt, requires_permission: android.permission.INTERNET}
+  - {id: 7,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v7/InsecureFactory.kt, requires_permission: android.permission.INTERNET}
+  - {id: 8,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v8/LegacyVerifier.kt, requires_permission: android.permission.INTERNET}
+  - {id: 9,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v9/ProceedingClient.kt, requires_permission: android.permission.INTERNET}
   - {id: 15,  flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v15/RawSocket.kt}
   - {id: 83,  flavor: full, outcome: "fix:add-code", where: (absence)}
   - {id: 113, flavor: full, outcome: "fix:resource", where: app/src/full/res/xml/network_security_config.xml}
   - {id: 46,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v46/FileProvider.kt}
   - {id: 85,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v85/PrefActivity.kt}
-  - {id: 86,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v86/FileWebActivity.kt}
+  # 86 canary (Sherlock defect): webviewfilescheme.py calls find_methods(".WebSettings", ...);
+  # androguard 4 uses re.match, so it only matches a root-package class named WebSettings and
+  # never Landroid/webkit/WebSettings;. The plant stays; report to the Sherlock team.
+  - {id: 86,  flavor: full, outcome: canary,     where: app/src/full/java/com/appknox/corpus/v86/FileWebActivity.kt}
   - {id: 88,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v88/DynamicReceiver.kt}
   - {id: 89,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v89/ImplicitService.kt}
   - {id: 94,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v94/CorsSettings.kt}
   - {id: 98,  flavor: full, outcome: "fix:code", where: v98lib/src/main/java/com/appknox/corpus/v98/PluginState.kt}
   - {id: 128, flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v128/RedirectActivity.kt}
   - {id: 16,  flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v16/WeakCipher.kt}
-  - {id: 17,  flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v17/LogLeak.kt, shared_with: [120]}
+  - {id: 17,  flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v17/LogLeak.kt}
   - {id: 29,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
   - {id: 30,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
   - {id: 31,  flavor: full, outcome: record-only,      where: app/src/full/java/org/apache/cordova/FakeCordova.kt}
@@ -56,5 +73,9 @@ vulnerabilities:
   - {id: 127, flavor: full, outcome: "fix:code",       where: app/src/full/java/com/appknox/corpus/v127/WeakRandom.kt}
   - {id: 133, flavor: full, outcome: "fix:add-code",   where: (absence), known_gap: true}
   - {id: 11, flavor: legacy, outcome: "declined:build", where: app/src/legacy/java/com/appknox/corpus/v11/JsBridge.kt}
-  - {id: 82, flavor: legacy, outcome: "fix:code",       where: app/src/legacy/java/com/appknox/corpus/v82/ContactsDump.kt}
+  # 82 canary (Sherlock defect): at targetSdk 16 androguard maps READ_CONTACTS only to
+  # IccPhoneBookInterfaceManager.getAdnRecordsInEf, so a ContentResolver read leaves it "unused";
+  # and the analyzer formats MethodAnalysis.show_info(), which androguard 4 does not have.
+  # The plant stays; report to the Sherlock team.
+  - {id: 82, flavor: legacy, outcome: canary,           where: app/src/legacy/java/com/appknox/corpus/v82/ContactsDump.kt}
   - {id: 95, flavor: legacy, outcome: "declined:build", where: app/src/legacy/java/com/appknox/corpus/v95/Deserializer.kt}

@@ -50,7 +50,24 @@ def detect(rows: list[dict], flavor: str, before: dict[int, int]) -> list[int]:
                   if r["outcome"] != "canary" and r["id"] not in before)
 
 
-def _result(row: dict, before: dict[int, int], after: dict[int, int]) -> str:
+def _still_present(row: dict, after: dict[int, int], record_only: frozenset[int],
+                   not_attempted: frozenset[int]) -> str:
+    """Why an attempted-to-fix id survived the after-scan."""
+    if row["id"] in not_attempted:
+        return "not-attempted"
+    sharers = [s for s in row.get("shared_with", []) if s in after]
+    if any(s not in record_only for s in sharers):
+        return "blocked-by-shared"
+    if sharers:
+        # Only record-only ids (never expected to be fixed) keep this one alive.
+        return "blocked-by-record-only"
+    return "missed-known-gap" if row.get("known_gap") else "missed"
+
+
+def _result(row: dict, before: dict[int, int], after: dict[int, int],
+            ctx: dict | None = None) -> str:
+    """Result for one row. ctx: record_only / removed_permissions / not_attempted sets."""
+    ctx = ctx or {}
     vid, outcome = row["id"], row["outcome"]
     if outcome in ("record-only", "canary"):
         return "recorded-present" if vid in after else "recorded-cleared"
@@ -59,27 +76,43 @@ def _result(row: dict, before: dict[int, int], after: dict[int, int]) -> str:
     if outcome == "declined:build":
         return "declined-as-expected" if vid in after else "cleared-unexpectedly"
     if vid not in after:
+        if row.get("requires_permission") in ctx.get("removed_permissions", frozenset()):
+            return "cleared-by-precondition-removal"
         return "fixed-as-expected"
-    if any(s in after for s in row.get("shared_with", [])):
-        return "blocked-by-shared"
-    return "missed-known-gap" if row.get("known_gap") else "missed"
+    return _still_present(row, after, ctx.get("record_only", frozenset()),
+                          ctx.get("not_attempted", frozenset()))
 
 
-def score(rows, flavor, before, after, before_count, after_count) -> dict:
-    """Assign every planted id of this flavor a result, and list regressions."""
+def score(rows, flavor, before, after, before_count, after_count,
+          removed_permissions=(), not_attempted=()) -> dict:
+    """Assign every planted id of this flavor a result, and list regressions.
+
+    removed_permissions: permissions the fix branch no longer declares (rows whose
+    requires_permission is among them cannot score fixed-as-expected).
+    not_attempted: ids the fixer reported it never attempted.
+    """
     if after_count < before_count:
         raise IncompleteScan(
             f"after-scan has {after_count} analyses, baseline {before_count}: not finished")
-    scored = [{"id": r["id"], "outcome": r["outcome"], "result": _result(r, before, after)}
+    ctx = {"record_only": frozenset(r["id"] for r in rows if r["outcome"] == "record-only"),
+           "removed_permissions": frozenset(removed_permissions),
+           "not_attempted": frozenset(not_attempted)}
+    scored = [{"id": r["id"], "outcome": r["outcome"], "result": _result(r, before, after, ctx)}
               for r in _flavor_rows(rows, flavor)]
     return {"flavor": flavor, "rows": scored,
             "regressions": sorted(set(after) - set(before))}
 
 
 def render_markdown(report: dict) -> str:
-    """Scorecard for the GitHub job summary."""
-    lines = [f"### Autofix corpus scorecard ({report['flavor']})", "",
-             "| id | expected | result |", "|---|---|---|"]
+    """Scorecard for the GitHub job summary, with the run metadata and PARTIAL stamp on top."""
+    title = f"### Autofix corpus scorecard ({report['flavor']})"
+    if report.get("partial"):
+        title += f" PARTIAL: {report['partial']}"
+    lines = [title, ""]
+    lines += [f"- {k}: {v}" for k, v in report.get("meta", {}).items()]
+    if report.get("meta"):
+        lines.append("")
+    lines += ["| id | expected | result |", "|---|---|---|"]
     lines += [f"| {r['id']} | {r['outcome']} | {r['result']} |" for r in report["rows"]]
     lines += ["", f"Regressions (new ids after the fix): {report['regressions'] or 'none'}"]
     return "\n".join(lines) + "\n"
@@ -102,8 +135,18 @@ def main(argv: list[str]) -> int:
             p.add_argument("--after", required=True)
             p.add_argument("--summary", required=True)
             p.add_argument("--json", required=True)
+            p.add_argument("--removed-permission", action="append", default=[],
+                           help="permission the fix branch no longer declares (repeatable)")
+            p.add_argument("--not-attempted", action="append", default=[], type=int,
+                           help="id the fixer never attempted (repeatable)")
+            p.add_argument("--partial", default="",
+                           help="stamp the scorecard PARTIAL with this reason")
+            p.add_argument("--meta", action="append", default=[],
+                           help="KEY=VALUE line for the scorecard header (repeatable)")
     args = parser.parse_args(argv)
 
+    if args.cmd == "score" and any("=" not in m for m in args.meta):
+        parser.error("--meta takes KEY=VALUE")
     rows = load_expected(args.expected)
     before_payload = _load_json(args.before)
     before = risky(before_payload)
@@ -114,11 +157,24 @@ def main(argv: list[str]) -> int:
 
     after_payload = _load_json(args.after)
     report = score(rows, args.flavor, before, risky(after_payload),
-                   before_payload.get("count", 0), after_payload.get("count", 0))
+                   before_payload.get("count", 0), after_payload.get("count", 0),
+                   removed_permissions=args.removed_permission,
+                   not_attempted=args.not_attempted)
+    report["meta"] = dict(m.split("=", 1) for m in args.meta)
+    if args.partial:
+        report["partial"] = args.partial
     Path(args.summary).write_text(render_markdown(report))
     Path(args.json).write_text(json.dumps(report, indent=2))
     return 0
 
 
+def cli(argv: list[str]) -> int:
+    """main() with an unfinished after-scan reported as one clean line, not a traceback."""
+    try:
+        return main(argv)
+    except IncompleteScan as exc:
+        sys.exit(f"score.py: {exc}")
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(cli(sys.argv[1:]))
