@@ -1,0 +1,36 @@
+name: Build Check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scorer and expected.yaml tests
+        run: |
+          pip install -r tools/requirements.txt
+          # exit 5 = no tests collected; allowed only until Task 2 adds tests
+          python -m pytest -q tools || [ $? -eq 5 ]
+      - name: Build both flavors
+        run: ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
+      - name: Check v1 signing (id 117 depends on it)
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$apksigner" verify --verbose app/build/outputs/apk/full/release/app-full-release.apk \
+            | grep -q "Verified using v1 scheme (JAR signing): true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: app/build/outputs/apk/*/release/*.apk
+          retention-days: 14
