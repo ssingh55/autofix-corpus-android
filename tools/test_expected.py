@@ -26,7 +26,6 @@ def test_where_paths_exist():
         assert (ROOT / r["where"]).exists(), f"id {r['id']}: {r['where']} missing"
 
 
-@pytest.mark.xfail(strict=True, reason="46/85/86/128 planted in Task 5; mark removed in Task 6")
 def test_shared_with_refers_to_planted_ids():
     planted = {r["id"] for r in rows()}
     for r in rows():

@@ -75,5 +75,30 @@
         </activity>
 
         <!-- id 118 needs no dedicated plant: minSdk 24 < 29 and no exported activity sets taskAffinity="" -->
+
+        <!-- id 46: exported, unprotected provider whose openFile trusts lastPathSegment (also trips 41) -->
+        <provider android:name=".v46.FileProvider"
+            android:authorities="com.appknox.corpus.v46" android:exported="true" />
+        <!-- id 85: exported PreferenceActivity -->
+        <activity android:name=".v85.PrefActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="com.appknox.corpus.V85" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <!-- id 86: exported activity that enables file access -->
+        <activity android:name=".v86.FileWebActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="com.appknox.corpus.V86" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <!-- id 128: exported activity that relaunches an attacker-supplied Intent -->
+        <activity android:name=".v128.RedirectActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="com.appknox.corpus.V128" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

@@ -28,3 +28,11 @@ vulnerabilities:
   - {id: 15,  flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v15/RawSocket.kt}
   - {id: 83,  flavor: full, outcome: "fix:add-code", where: (absence)}
   - {id: 113, flavor: full, outcome: "fix:resource", where: app/src/full/res/xml/network_security_config.xml}
+  - {id: 46,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v46/FileProvider.kt}
+  - {id: 85,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v85/PrefActivity.kt}
+  - {id: 86,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v86/FileWebActivity.kt}
+  - {id: 88,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v88/DynamicReceiver.kt}
+  - {id: 89,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v89/ImplicitService.kt}
+  - {id: 94,  flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v94/CorsSettings.kt}
+  - {id: 98,  flavor: full, outcome: "fix:code", where: v98lib/src/main/java/com/appknox/corpus/v98/PluginState.kt}
+  - {id: 128, flavor: full, outcome: "fix:code", where: app/src/full/java/com/appknox/corpus/v128/RedirectActivity.kt}

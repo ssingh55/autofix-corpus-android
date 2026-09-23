@@ -12,5 +12,10 @@ object Corpus {
         com.appknox.corpus.v8.LegacyVerifier.create()
         WebView(context).webViewClient = com.appknox.corpus.v9.ProceedingClient()
         com.appknox.corpus.v15.RawSocket.open()
+        val web = WebView(context)
+        com.appknox.corpus.v88.DynamicReceiver.register(context)
+        com.appknox.corpus.v89.ImplicitService.start(context)
+        com.appknox.corpus.v94.CorsSettings.apply(web)
+        com.appknox.corpus.v98.PluginState.enable(web)
     }
 }

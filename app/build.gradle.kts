@@ -50,3 +50,7 @@ android {
         disable += "HardcodedDebugMode"
     }
 }
+
+dependencies {
+    "fullImplementation"(project(":v98lib"))
+}
