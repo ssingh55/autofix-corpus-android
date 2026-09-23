@@ -37,8 +37,11 @@ jobs:
             echo "debug.keystore not found under $HOME" >&2
             exit 1
           fi
+          # --min-sdk-version overrides apksigner's own inference from the APK's manifest
+          # (minSdk 24), which otherwise silently overrides --v1-signing-enabled too.
           "$apksigner" sign --ks "$keystore" --ks-pass pass:android \
             --key-pass pass:android --ks-key-alias androiddebugkey \
+            --min-sdk-version 1 \
             --v1-signing-enabled true --v2-signing-enabled true \
             app/build/outputs/apk/full/release/app-full-release.apk
       - name: Check v1 signing (id 117 depends on it)
