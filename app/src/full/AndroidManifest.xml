@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- id 10: VIBRATE is declared but no Vibrator API is ever called -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- INTERNET is USED (Corpus.runAll calls ConnectivityManager.reportNetworkConnectivity),
+         so id 10 never lists it: removing it would silently clear the TLS ids 5-9. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- id 34: storage permissions plus a browsable VIEW activity -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -15,8 +17,13 @@
     <application android:networkSecurityConfig="@xml/network_security_config">
         <uses-library android:name="org.apache.http.legacy" android:required="false" />
 
-        <!-- id 1: exported service, no intent-filter, no permission (also trips 40) -->
-        <service android:name=".components.V1OpenService" android:exported="true" />
+        <!-- id 1: exported service, no intent-filter, no permission (also trips 40).
+             The meta-data child is load-bearing: Sherlock's UnprotectedServicesAnalyzer
+             only reports from inside its loop over the service's children, so a
+             self-closing service with no children is never reported. -->
+        <service android:name=".components.V1OpenService" android:exported="true">
+            <meta-data android:name="corpus.v1" android:value="1" />
+        </service>
 
         <!-- id 2: grant-uri-permission covering the whole tree -->
         <provider android:name=".components.V2GrantProvider"

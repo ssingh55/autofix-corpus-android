@@ -1,11 +1,16 @@
 package com.appknox.corpus
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.webkit.WebView
 
 /** Calls every planted construct of this flavor so each stays reachable from MainActivity. */
 object Corpus {
     fun runAll(context: Context) {
+        // Uses INTERNET (androguard maps reportNetworkConnectivity to it), so id 10's
+        // "unused permissions" finding never includes INTERNET. See expected.yaml ids 5-10.
+        context.getSystemService(ConnectivityManager::class.java)
+            ?.reportNetworkConnectivity(null, true)
         com.appknox.corpus.v5.TrustAllManager()
         com.appknox.corpus.v6.AllowAllVerifier()
         com.appknox.corpus.v7.InsecureFactory.create()
