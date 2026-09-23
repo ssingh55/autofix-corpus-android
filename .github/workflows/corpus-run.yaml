@@ -1,0 +1,108 @@
+# Dispatch ONLY: every run spends model budget. Never add push/pull_request.
+name: Corpus Run
+on:
+  workflow_dispatch:
+    inputs:
+      baseRef:
+        description: "Tag or branch holding the untouched corpus"
+        default: "corpus-base"
+env:
+  APPKNOX_API_HOST: https://autofix.staging.appknox.io/
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      APPKNOX_ACCESS_TOKEN: ${{ secrets.APPKNOX_AUTOFIX_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BASE_REF: ${{ inputs.baseRef }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.baseRef }}
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.24" }
+      - uses: actions/checkout@v4
+        with: { repository: appknox/appknox-go, ref: feat/autofix-cli-gate, path: appknox-go }
+      - name: Build tools
+        run: |
+          (cd appknox-go && go build -o "$GITHUB_WORKSPACE/bin/appknox" .)
+          pip install -r tools/requirements.txt
+      - name: Create the run branch from the base
+        run: |
+          run_branch="corpus-run/${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/${run_branch}"
+          echo "RUN_BRANCH=${run_branch}" >> "$GITHUB_ENV"
+          echo "HEAD_REF=autofix-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+      - name: Build baseline APKs
+        run: ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
+      - name: Force v1 signing on the baseline full APK
+        run: tools/force-v1.sh app/build/outputs/apk/full/release/app-full-release.apk
+      - name: Upload, wait, detection gate
+        run: |
+          set -euo pipefail
+          for flavor in full legacy; do
+            id=$(./bin/appknox upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
+            [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::bad file id '$id'"; exit 1; }
+            echo "BEFORE_${flavor}=${id}" >> "$GITHUB_ENV"
+            tools/wait_scan.sh "$id"
+            curl -sf --retry 5 -H "Authorization: Token $APPKNOX_ACCESS_TOKEN" \
+              "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "before-${flavor}.json"
+            python tools/score.py detect --expected expected.yaml --flavor "$flavor" --before "before-${flavor}.json"
+          done
+      - name: Autofix both flavors onto one PR
+        run: |
+          set -euo pipefail
+          for flavor in full legacy; do
+            var="BEFORE_${flavor}"
+            ./bin/appknox autofix --file-id "${!var}" --ref "$RUN_BRANCH" --head-ref "$HEAD_REF"
+          done
+      - name: Build the PR head and rescan
+        run: |
+          set -euo pipefail
+          # Step 1 finding: appknox-go's helper/delivery.go (feat/autofix-cli-gate) builds the
+          # pushed branch as prBranch(headRef) = capGitRef(autofixBranchPrefix + sanitizeFeature(headRef), headRef),
+          # where autofixBranchPrefix = "appknox-autofix/". HEAD_REF here ("autofix-<run id>")
+          # contains only [A-Za-z0-9-], so sanitizeFeature is a no-op and the branch is well
+          # under the 244-byte cap, so capGitRef never truncates it. Derived statically rather
+          # than parsed from `autofix` output.
+          FIX_BRANCH="appknox-autofix/${HEAD_REF}"
+          git fetch origin "$FIX_BRANCH"
+          git checkout FETCH_HEAD
+          git diff "origin/$RUN_BRANCH" --stat
+          ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
+          tools/force-v1.sh app/build/outputs/apk/full/release/app-full-release.apk
+          for flavor in full legacy; do
+            id=$(./bin/appknox upload "app/build/outputs/apk/${flavor}/release/app-${flavor}-release.apk" --knoxiq)
+            [[ "$id" =~ ^[0-9]+$ ]] || { echo "::error::bad file id '$id'"; exit 1; }
+            tools/wait_scan.sh "$id"
+            curl -sf --retry 5 -H "Authorization: Token $APPKNOX_ACCESS_TOKEN" \
+              "${APPKNOX_API_HOST}api/v2/files/${id}/analyses?limit=200" > "after-${flavor}.json"
+          done
+      - name: Score
+        if: always()
+        run: |
+          for flavor in full legacy; do
+            [ -f "after-${flavor}.json" ] || continue
+            python tools/score.py score --expected expected.yaml --flavor "$flavor" \
+              --before "before-${flavor}.json" --after "after-${flavor}.json" \
+              --summary "scorecard-${flavor}.md" --json "scorecard-${flavor}.json"
+            cat "scorecard-${flavor}.md" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corpus-run
+          path: |
+            before-*.json
+            after-*.json
+            scorecard-*.*
