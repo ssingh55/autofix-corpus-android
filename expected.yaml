@@ -20,3 +20,11 @@ vulnerabilities:
   - {id: 84,  flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml}
   - {id: 96,  flavor: full, outcome: "fix:manifest", where: app/src/main/AndroidManifest.xml}
   - {id: 118, flavor: full, outcome: "fix:manifest", where: app/src/full/AndroidManifest.xml, shared_with: [34, 38, 42, 84, 85, 86, 128]}
+  - {id: 5,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v5/TrustAllManager.kt}
+  - {id: 6,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v6/AllowAllVerifier.kt}
+  - {id: 7,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v7/InsecureFactory.kt}
+  - {id: 8,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v8/LegacyVerifier.kt}
+  - {id: 9,   flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v9/ProceedingClient.kt}
+  - {id: 15,  flavor: full, outcome: "fix:code",     where: app/src/full/java/com/appknox/corpus/v15/RawSocket.kt}
+  - {id: 83,  flavor: full, outcome: "fix:add-code", where: (absence)}
+  - {id: 113, flavor: full, outcome: "fix:resource", where: app/src/full/res/xml/network_security_config.xml}

@@ -12,7 +12,7 @@
     <!-- ids 42-45 guard with this normal-level permission -->
     <permission android:name="com.appknox.corpus.permission.NORMAL" android:protectionLevel="normal" />
 
-    <application>
+    <application android:networkSecurityConfig="@xml/network_security_config">
         <uses-library android:name="org.apache.http.legacy" android:required="false" />
 
         <!-- id 1: exported service, no intent-filter, no permission (also trips 40) -->
