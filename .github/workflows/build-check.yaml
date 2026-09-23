@@ -10,6 +10,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,6 +26,18 @@ jobs:
         run: ./gradlew --no-daemon assembleFullRelease assembleLegacyRelease
       - name: Force v1 signing on the full APK (AGP drops v1 when minSdk >= 24, see issuetracker.google.com/issues/134858541)
         run: tools/force-v1.sh app/build/outputs/apk/full/release/app-full-release.apk
+      - name: Assert plant-bearing APK contents (cheap proxy for detection, no Sherlock in CI)
+        run: |
+          # No pipefail here: grep -q exits on the first match and SIGPIPEs unzip.
+          set -eu
+          apk=app/build/outputs/apk/full/release/app-full-release.apk
+          test -f "$apk"
+          # ids 29-36: Sherlock's PhoneGap analyzers read the literal path res/xml/config.xml
+          unzip -l "$apk" | grep -q ' res/xml/config.xml$' || { echo "::error::res/xml/config.xml missing (resource paths shortened?)"; exit 1; }
+          # ids 29-33 and 37: the fake Cordova and Jedis classes must be in the dex
+          unzip -p "$apk" 'classes*.dex' | grep -a -q 'Lorg/apache/cordova/' || { echo "::error::no Lorg/apache/cordova/ in dex"; exit 1; }
+          unzip -p "$apk" 'classes*.dex' | grep -a -q 'Lredis/clients/jedis/' || { echo "::error::no Lredis/clients/jedis/ in dex"; exit 1; }
+          echo "full APK carries res/xml/config.xml, Cordova and Jedis classes"
       - uses: actions/upload-artifact@v4
         with:
           name: apks
