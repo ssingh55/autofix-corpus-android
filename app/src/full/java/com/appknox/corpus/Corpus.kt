@@ -25,7 +25,6 @@ object Corpus {
         com.appknox.corpus.v16.WeakCipher.create()
         com.appknox.corpus.v17.LogLeak.leak()
         com.appknox.corpus.v93.RawSql.find("corpus")
-        android.util.Log.i("CorpusV120", com.appknox.corpus.v120.Keys.AWS_ACCESS_KEY_ID.take(4))
         com.appknox.corpus.v127.WeakRandom.otp()
         org.apache.cordova.FakeCordova()
         redis.clients.jedis.Jedis()

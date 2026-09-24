@@ -12,7 +12,10 @@
     <!-- id 4 canary: a custom permission with a non-signature level -->
     <permission android:name="com.appknox.corpus.permission.V4" android:protectionLevel="normal" />
     <!-- ids 42-45 guard with this normal-level permission -->
-    <permission android:name="com.appknox.corpus.permission.NORMAL" android:protectionLevel="normal" />
+    <permission android:name="com.appknox.corpus.permission.NORMAL" android:protectionLevel="signature" />
+    <permission android:name="com.appknox.corpus.permission.SHARE_FILE" android:protectionLevel="signature" />
+    <permission android:name="com.appknox.corpus.permission.LAUNCH_V42_ACTIVITY_TRUSTED" android:protectionLevel="signature" />
+    <permission android:name="com.appknox.corpus.permission.PROVIDER_ACCESS" android:protectionLevel="signature" />
 
     <application android:networkSecurityConfig="@xml/network_security_config">
         <uses-library android:name="org.apache.http.legacy" android:required="false" />
@@ -21,7 +24,7 @@
              The meta-data child is load-bearing: Sherlock's UnprotectedServicesAnalyzer
              only reports from inside its loop over the service's children, so a
              self-closing service with no children is never reported. -->
-        <service android:name=".components.V1OpenService" android:exported="true">
+        <service android:name=".components.V1OpenService" android:exported="false">
             <meta-data android:name="corpus.v1" android:value="1" />
         </service>
 
@@ -33,14 +36,14 @@
         </provider>
 
         <!-- ids 38-41: exported, no permission -->
-        <activity android:name=".components.V38Activity" android:exported="true">
+        <activity android:name=".components.V38Activity" android:exported="false">
             <intent-filter>
                 <action android:name="com.appknox.corpus.V38" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
         <receiver android:name=".components.V39Receiver" android:exported="true" />
-        <service android:name=".components.V40Service" android:exported="true">
+        <service android:name=".components.V40Service" android:exported="false">
             <intent-filter><action android:name="com.appknox.corpus.V40" /></intent-filter>
         </service>
         <provider android:name=".components.V41Provider"
@@ -48,22 +51,23 @@
 
         <!-- ids 42-45: exported, guarded by a NON-signature permission -->
         <activity android:name=".components.V42Activity" android:exported="true"
-            android:permission="com.appknox.corpus.permission.NORMAL">
+            android:permission="com.appknox.corpus.permission.LAUNCH_V42_ACTIVITY_TRUSTED">
             <intent-filter>
                 <action android:name="com.appknox.corpus.V42" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-        <receiver android:name=".components.V43Receiver" android:exported="true"
-            android:permission="com.appknox.corpus.permission.NORMAL" />
+        <receiver android:name=".components.V43Receiver" android:exported="false" />
         <service android:name=".components.V44Service" android:exported="true"
             android:permission="com.appknox.corpus.permission.NORMAL" />
         <provider android:name=".components.V45Provider"
             android:authorities="com.appknox.corpus.v45" android:exported="true"
-            android:permission="com.appknox.corpus.permission.NORMAL" />
+            android:readPermission="com.appknox.corpus.permission.PROVIDER_ACCESS"
+            android:writePermission="com.appknox.corpus.permission.PROVIDER_ACCESS" />
 
         <!-- id 84: SEND with the file scheme -->
-        <activity android:name=".components.V84ShareActivity" android:exported="true">
+        <activity android:name=".components.V84ShareActivity" android:exported="true"
+            android:permission="com.appknox.corpus.permission.SHARE_FILE">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 
 object DynamicReceiver {
     private val receiver = object : BroadcastReceiver() {
@@ -11,6 +12,11 @@ object DynamicReceiver {
     }
 
     fun register(context: Context) {
-        context.registerReceiver(receiver, IntentFilter("com.appknox.corpus.PING"))
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter("com.appknox.corpus.PING"),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
     }
 }

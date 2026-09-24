@@ -7,6 +7,6 @@ import android.webkit.WebViewClient
 
 class ProceedingClient : WebViewClient() {
     override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
-        handler?.proceed()
+        handler?.cancel()
     }
 }

@@ -5,6 +5,6 @@ import android.database.sqlite.SQLiteDatabase
 object RawSql {
     fun find(name: String) {
         val db = SQLiteDatabase.create(null)
-        db.rawQuery("SELECT * FROM users WHERE name = '" + name + "'", null).close()
+        db.rawQuery("SELECT * FROM users WHERE name = ?", arrayOf(name)).close()
     }
 }
