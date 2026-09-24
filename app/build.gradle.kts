@@ -53,4 +53,9 @@ android {
 
 dependencies {
     "fullImplementation"(project(":v98lib"))
+    // autofix emits ContextCompat calls (id 88), so the fix branch needs androidx.core to
+    // compile. compileOnly keeps androidx OUT of the APK: its own Window.addFlags(FLAG_SECURE)
+    // calls would silence id 92, an absence check that scans library code. The static-only
+    // corpus never runs the APK. Full only: legacy keeps minSdk 16 and no crypto (id 82).
+    "fullCompileOnly"("androidx.core:core-ktx:1.13.1")
 }
