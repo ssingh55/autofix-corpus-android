@@ -1,7 +1,7 @@
 package com.appknox.corpus.v127
 
-import java.util.Random
+import java.security.SecureRandom
 
 object WeakRandom {
-    fun otp(): Int = Random().nextInt(1_000_000)
+    fun otp(): Int = SecureRandom().nextInt(1_000_000)
 }
