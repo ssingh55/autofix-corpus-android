@@ -53,4 +53,7 @@ android {
 
 dependencies {
     "fullImplementation"(project(":v98lib"))
+    // Real apps ship androidx.core, and autofix emits ContextCompat calls (id 88). Full only:
+    // legacy keeps minSdk 16 and id 82 needs no crypto anywhere in its APK.
+    "fullImplementation"("androidx.core:core-ktx:1.13.1")
 }
