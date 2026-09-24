@@ -1,18 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- id 10: VIBRATE is declared but no Vibrator API is ever called -->
-    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- INTERNET is USED (Corpus.runAll calls ConnectivityManager.reportNetworkConnectivity),
          so id 10 never lists it: removing it would silently clear the TLS ids 5-9. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- id 34: storage permissions plus a browsable VIEW activity -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
     <!-- id 4 canary: a custom permission with a non-signature level -->
     <permission android:name="com.appknox.corpus.permission.V4" android:protectionLevel="normal" />
     <!-- ids 42-45 guard with this normal-level permission -->
-    <permission android:name="com.appknox.corpus.permission.NORMAL" android:protectionLevel="normal" />
+    <permission android:name="com.appknox.corpus.permission.NORMAL" android:protectionLevel="signature" />
+    <permission android:name="com.appknox.corpus.permission.SHARE_FILE" android:protectionLevel="signature" />
 
     <application android:networkSecurityConfig="@xml/network_security_config">
         <uses-library android:name="org.apache.http.legacy" android:required="false" />
@@ -21,7 +19,7 @@
              The meta-data child is load-bearing: Sherlock's UnprotectedServicesAnalyzer
              only reports from inside its loop over the service's children, so a
              self-closing service with no children is never reported. -->
-        <service android:name=".components.V1OpenService" android:exported="true">
+        <service android:name=".components.V1OpenService" android:exported="false">
             <meta-data android:name="corpus.v1" android:value="1" />
         </service>
 
@@ -33,14 +31,14 @@
         </provider>
 
         <!-- ids 38-41: exported, no permission -->
-        <activity android:name=".components.V38Activity" android:exported="true">
+        <activity android:name=".components.V38Activity" android:exported="false">
             <intent-filter>
                 <action android:name="com.appknox.corpus.V38" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-        <receiver android:name=".components.V39Receiver" android:exported="true" />
-        <service android:name=".components.V40Service" android:exported="true">
+        <receiver android:name=".components.V39Receiver" android:exported="false" />
+        <service android:name=".components.V40Service" android:exported="false">
             <intent-filter><action android:name="com.appknox.corpus.V40" /></intent-filter>
         </service>
         <provider android:name=".components.V41Provider"
@@ -54,8 +52,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-        <receiver android:name=".components.V43Receiver" android:exported="true"
-            android:permission="com.appknox.corpus.permission.NORMAL" />
+        <receiver android:name=".components.V43Receiver" android:exported="false" />
         <service android:name=".components.V44Service" android:exported="true"
             android:permission="com.appknox.corpus.permission.NORMAL" />
         <provider android:name=".components.V45Provider"
@@ -63,7 +60,8 @@
             android:permission="com.appknox.corpus.permission.NORMAL" />
 
         <!-- id 84: SEND with the file scheme -->
-        <activity android:name=".components.V84ShareActivity" android:exported="true">
+        <activity android:name=".components.V84ShareActivity" android:exported="true"
+            android:permission="com.appknox.corpus.permission.SHARE_FILE">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -87,21 +85,21 @@
         <provider android:name=".v46.FileProvider"
             android:authorities="com.appknox.corpus.v46" android:exported="true" />
         <!-- id 85: exported PreferenceActivity -->
-        <activity android:name=".v85.PrefActivity" android:exported="true">
+        <activity android:name=".v85.PrefActivity" android:exported="false">
             <intent-filter>
                 <action android:name="com.appknox.corpus.V85" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
         <!-- id 86: exported activity that enables file access -->
-        <activity android:name=".v86.FileWebActivity" android:exported="true">
+        <activity android:name=".v86.FileWebActivity" android:exported="false">
             <intent-filter>
                 <action android:name="com.appknox.corpus.V86" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
         <!-- id 128: exported activity that relaunches an attacker-supplied Intent -->
-        <activity android:name=".v128.RedirectActivity" android:exported="true">
+        <activity android:name=".v128.RedirectActivity" android:exported="false">
             <intent-filter>
                 <action android:name="com.appknox.corpus.V128" />
                 <category android:name="android.intent.category.DEFAULT" />

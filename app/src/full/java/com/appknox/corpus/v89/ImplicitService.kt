@@ -5,6 +5,8 @@ import android.content.Intent
 
 object ImplicitService {
     fun start(context: Context) {
-        context.startService(Intent("com.appknox.corpus.ACTION_SYNC"))
+        val intent = Intent("com.appknox.corpus.ACTION_SYNC")
+        intent.setPackage(context.packageName)
+        context.startService(intent)
     }
 }

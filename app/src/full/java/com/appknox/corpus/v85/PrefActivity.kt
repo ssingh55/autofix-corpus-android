@@ -3,4 +3,11 @@ package com.appknox.corpus.v85
 import android.preference.PreferenceActivity
 
 @Suppress("DEPRECATION")
-class PrefActivity : PreferenceActivity()
+class PrefActivity : PreferenceActivity() {
+
+    override fun isValidFragment(fragmentName: String?): Boolean {
+        // No application-specific fragments are hosted by this activity,
+        // so no fragment names are allowlisted.
+        return false
+    }
+}
