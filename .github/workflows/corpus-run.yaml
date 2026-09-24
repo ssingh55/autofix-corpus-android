@@ -194,7 +194,7 @@ jobs:
             log="$OUT/autofix-${flavor}.log"
             [ -f "$log" ] || continue
             grep -q 'were not attempted' "$log" && partial="${partial:+$partial, }${flavor} run truncated at the budget (autofix-${flavor}.log)"
-            skipped="${skipped:+$skipped, }${flavor} $(grep -c '^autofix: skipping' "$log")"
+            skipped="${skipped:+$skipped, }${flavor} $(grep -c '^autofix: skipping' "$log" || true)"
           done
           removed=()
           if [ -f "$OUT/fix-full-AndroidManifest.xml" ]; then
