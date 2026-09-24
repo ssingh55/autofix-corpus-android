@@ -1,13 +1,27 @@
 package com.appknox.corpus.v11
 
 import android.annotation.SuppressLint
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import android.webkit.WebViewClient
 
 object JsBridge {
-    class Bridge { fun ping(): String = "pong" }
+    class Bridge {
+        @JavascriptInterface
+        fun ping(): String = "pong"
+    }
 
     @SuppressLint("JavascriptInterface", "AddJavascriptInterface")
     fun expose(web: WebView) {
         web.addJavascriptInterface(Bridge(), "corpusBridge")
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                if (request.url.scheme != null && request.url.scheme != "https") {
+                    return true
+                }
+                return false
+            }
+        }
     }
 }
